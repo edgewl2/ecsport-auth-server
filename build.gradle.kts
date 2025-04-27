@@ -78,8 +78,8 @@ openApiGenerate {
     generatorName.set("spring")
     inputSpec.set("$projectDir/src/main/resources/openapi/api.yaml")
     outputDir.set("${layout.buildDirectory.get()}/generated")
-    apiPackage.set("dev.edgeahz.ec.sports.authserver.infrastructure.rest.api")
-    modelPackage.set("dev.edgeahz.ec.sports.authserver.infrastructure.rest.model")
+    apiPackage.set("dev.edgeahz.ec.sports.authserver.api.rest")
+    modelPackage.set("dev.edgeahz.ec.sports.authserver.api.rest.dto")
 
     additionalProperties.set(mapOf(
         "additionalModelTypeAnnotations" to "@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)"

@@ -1,7 +1,7 @@
-package dev.edgeahz.ec.sports.authserver.infrastructure.rest.controller;
+package dev.edgeahz.ec.sports.authserver.api.rest.controller;
 
-import dev.edgeahz.ec.sports.authserver.infrastructure.rest.api.ManagementApi;
-import dev.edgeahz.ec.sports.authserver.infrastructure.rest.model.HealthStatus;
+import dev.edgeahz.ec.sports.authserver.api.rest.ManagementApi;
+import dev.edgeahz.ec.sports.authserver.api.rest.dto.HealthStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;

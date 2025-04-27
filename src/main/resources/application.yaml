@@ -56,4 +56,4 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
     operationsSorter: method
-    packages-to-scan: dev.edgeahz.ec.sports.authserver.api
+    packages-to-scan: dev.edgeahz.ec.sports.authserver.api.rest
