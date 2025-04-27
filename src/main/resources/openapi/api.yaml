@@ -1,0 +1,1161 @@
+openapi: 3.1.0
+info:
+  title: Servidor de Autenticación Centralizado - Sports Store API
+  description: |-
+    API para autenticación centralizada para tienda de artículos deportivos.
+    
+    Este servidor implementa OAuth 2.0 y OpenID Connect para proporcionar servicios
+    de autenticación y autorización a todas las aplicaciones del ecosistema Sports Store.
+    
+    La gestión de usuarios se maneja en un microservicio separado.
+  contact:
+    name: Edvin Gerardo Aguirre Hernández
+    email: edgewl2@gmail.com
+    url: https://sportsstore.example.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+  termsOfService: https://sportsstore.example.com/terms
+
+servers:
+  - url: 'http://localhost:8080'
+    description: Servidor de desarrollo
+  - url: 'https://auth.sportsstore.example.com'
+    description: Servidor de producción
+  - url: 'https://auth-staging.sportsstore.example.com'
+    description: Servidor de staging
+
+tags:
+  - name: authentication
+    description: Operaciones relacionadas con autenticación y autorización
+  - name: discovery
+    description: Endpoints de descubrimiento y configuración
+  - name: management
+    description: Endpoints de administración y monitoreo
+  - name: clients
+    description: Gestión de clientes OAuth2
+
+paths:
+  /oauth2/token:
+    post:
+      tags:
+        - authentication
+      summary: Obtener token de acceso
+      description: Genera tokens de acceso y refresh tokens según el tipo de concesión especificado
+      operationId: getToken
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - client_id
+              properties:
+                grant_type:
+                  type: string
+                  enum: [password, refresh_token, client_credentials, authorization_code]
+                  description: Tipo de concesión OAuth 2.0
+                username:
+                  type: string
+                  description: Nombre de usuario (requerido para grant_type=password)
+                password:
+                  type: string
+                  format: password
+                  description: Contraseña (requerido para grant_type=password)
+                refresh_token:
+                  type: string
+                  description: Token de actualización (requerido para grant_type=refresh_token)
+                client_id:
+                  type: string
+                  description: Identificador del cliente
+                client_secret:
+                  type: string
+                  format: password
+                  description: Secreto del cliente (requerido para clientes confidenciales)
+                scope:
+                  type: string
+                  description: Ámbitos de acceso solicitados, separados por espacios
+                code:
+                  type: string
+                  description: Código de autorización (requerido para grant_type=authorization_code)
+                redirect_uri:
+                  type: string
+                  format: uri
+                  description: URI de redirección (requerido para grant_type=authorization_code)
+                code_verifier:
+                  type: string
+                  description: Verificador de código PKCE (opcional para grant_type=authorization_code)
+      responses:
+        '200':
+          description: Token generado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                access_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+                token_type: "Bearer"
+                expires_in: 3600
+                refresh_token: "def50200641f0ef5d3ce2a..."
+                scope: "read write"
+                id_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Parámetros inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "invalid_request"
+                error_description: "Parámetros requeridos faltantes"
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "invalid_client"
+                error_description: "Cliente no autorizado"
+        '403':
+          description: Acceso prohibido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "insufficient_scope"
+                error_description: "El cliente no tiene los permisos necesarios"
+
+  /oauth2/revoke:
+    post:
+      tags:
+        - authentication
+      summary: Revocar token
+      description: Revoca un token de acceso o refresh token
+      operationId: revokeToken
+      security:
+        - OAuth2: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - token
+                - token_type_hint
+              properties:
+                token:
+                  type: string
+                  description: Token a revocar
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+                  description: Tipo de token a revocar
+      responses:
+        '200':
+          description: Token revocado exitosamente
+        '400':
+          description: Parámetros inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/introspect:
+    post:
+      tags:
+        - authentication
+      summary: Introspección de token
+      description: Verifica la validez de un token y devuelve su información
+      operationId: introspectToken
+      security:
+        - OAuth2: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Token a verificar
+                token_type_hint:
+                  type: string
+                  enum: [access_token, refresh_token]
+                  description: Sugerencia sobre el tipo de token
+      responses:
+        '200':
+          description: Información del token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IntrospectionResponse'
+              example:
+                active: true
+                scope: "read write"
+                client_id: "sports_store_web"
+                username: "usuario@ejemplo.com"
+                exp: 1619631600
+                sub: "123456789"
+                iss: "https://auth.sportsstore.example.com"
+                aud: "sports_store_api"
+                iat: 1619628000
+                jti: "abcdef123456"
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/authorize:
+    get:
+      tags:
+        - authentication
+      summary: Endpoint de autorización
+      description: Inicia el flujo de autorización OAuth 2.0
+      operationId: authorize
+      parameters:
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code, token]
+          description: Tipo de respuesta solicitada
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: URI de redirección
+        - name: scope
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Ámbitos solicitados, separados por espacios
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Valor de estado para prevenir CSRF
+        - name: code_challenge
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Desafío PKCE
+        - name: code_challenge_method
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [plain, S256]
+          description: Método de desafío PKCE
+      responses:
+        '302':
+          description: Redirección al cliente con código de autorización o token
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+              description: URI de redirección con parámetros de respuesta
+
+  /oauth2/userinfo:
+    get:
+      tags:
+        - authentication
+      summary: Información del usuario
+      description: Devuelve información del usuario autenticado según OpenID Connect
+      operationId: getUserInfo
+      security:
+        - OAuth2: [openid]
+      responses:
+        '200':
+          description: Información del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+              example:
+                sub: "123456789"
+                name: "Juan Pérez"
+                given_name: "Juan"
+                family_name: "Pérez"
+                email: "usuario@ejemplo.com"
+                email_verified: true
+                phone_number: "+50212345678"
+                phone_number_verified: false
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients:
+    post:
+      tags:
+        - clients
+      summary: Registrar cliente OAuth
+      description: Registra un nuevo cliente OAuth para usar el servidor de autenticación
+      operationId: registerClient
+      security:
+        - OAuth2: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientRegistration'
+            example:
+              client_name: "Sports Store Web App"
+              redirect_uris: ["https://app.sportsstore.example.com/callback"]
+              grant_types: ["authorization_code", "refresh_token"]
+              response_types: ["code"]
+              scope: "openid profile email read write"
+              token_endpoint_auth_method: "client_secret_basic"
+      responses:
+        '201':
+          description: Cliente registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+              example:
+                client_id: "s6BhdRkqt3"
+                client_secret: "7Fjfp0ZBr1KtDRbnfVdmIw"
+                client_name: "Sports Store Web App"
+                redirect_uris: ["https://app.sportsstore.example.com/callback"]
+                grant_types: ["authorization_code", "refresh_token"]
+                response_types: ["code"]
+                scope: "openid profile email read write"
+                token_endpoint_auth_method: "client_secret_basic"
+                client_id_issued_at: 1617979500
+                client_secret_expires_at: 0
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags:
+        - clients
+      summary: Listar todos los clientes
+      description: Devuelve una lista de todos los clientes OAuth registrados
+      operationId: getAllClients
+      security:
+        - OAuth2: [admin]
+      responses:
+        '200':
+          description: Lista de clientes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ClientResponse'
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients/{client_id}:
+    get:
+      tags:
+        - clients
+      summary: Obtener información del cliente
+      description: Devuelve información sobre un cliente OAuth registrado
+      operationId: getClient
+      security:
+        - OAuth2: [admin]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+      responses:
+        '200':
+          description: Información del cliente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "not_found"
+                error_description: "Cliente no encontrado"
+
+    put:
+      tags:
+        - clients
+      summary: Actualizar cliente
+      description: Actualiza la información de un cliente OAuth registrado
+      operationId: updateClient
+      security:
+        - OAuth2: [admin]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientUpdate'
+            example:
+              client_name: "Sports Store Web App v2"
+              redirect_uris: ["https://app.sportsstore.example.com/callback", "https://mobile.sportsstore.example.com/callback"]
+              scope: "openid profile email read write"
+      responses:
+        '200':
+          description: Cliente actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientResponse'
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - clients
+      summary: Eliminar cliente
+      description: Elimina un cliente OAuth registrado
+      operationId: deleteClient
+      security:
+        - OAuth2: [admin]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+      responses:
+        '204':
+          description: Cliente eliminado exitosamente
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients/{client_id}/deactivate:
+    post:
+      tags:
+        - clients
+      summary: Desactivar cliente
+      description: Desactiva un cliente OAuth registrado
+      operationId: deactivateClient
+      security:
+        - OAuth2: [admin]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+      responses:
+        '204':
+          description: Cliente desactivado exitosamente
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /oauth2/clients/{client_id}/activate:
+    post:
+      tags:
+        - clients
+      summary: Activar cliente
+      description: Activa un cliente OAuth registrado
+      operationId: activateClient
+      security:
+        - OAuth2: [admin]
+      parameters:
+        - name: client_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Identificador del cliente
+      responses:
+        '204':
+          description: Cliente activado exitosamente
+        '404':
+          description: Cliente no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /.well-known/openid-configuration:
+    get:
+      tags:
+        - discovery
+      summary: Configuración OpenID Connect
+      description: Devuelve la configuración OIDC del servidor
+      operationId: getOidcConfiguration
+      responses:
+        '200':
+          description: Configuración OIDC
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcConfiguration'
+              example:
+                issuer: "https://auth.sportsstore.example.com"
+                authorization_endpoint: "https://auth.sportsstore.example.com/oauth2/authorize"
+                token_endpoint: "https://auth.sportsstore.example.com/oauth2/token"
+                userinfo_endpoint: "https://auth.sportsstore.example.com/oauth2/userinfo"
+                jwks_uri: "https://auth.sportsstore.example.com/.well-known/jwks.json"
+                registration_endpoint: "https://auth.sportsstore.example.com/oauth2/clients"
+                scopes_supported: ["openid", "profile", "email", "phone", "read", "write", "admin"]
+                response_types_supported: ["code", "token", "id_token", "code token", "code id_token", "token id_token", "code token id_token"]
+                grant_types_supported: ["authorization_code", "implicit", "password", "client_credentials", "refresh_token"]
+                token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post", "private_key_jwt"]
+                subject_types_supported: ["public", "pairwise"]
+                id_token_signing_alg_values_supported: ["RS256", "ES256"]
+                claims_supported: ["sub", "iss", "auth_time", "name", "given_name", "family_name", "email", "email_verified"]
+
+  /.well-known/jwks.json:
+    get:
+      tags:
+        - discovery
+      summary: JSON Web Key Set
+      description: Devuelve las claves públicas para verificar tokens
+      operationId: getJwks
+      responses:
+        '200':
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JsonWebKey'
+              example:
+                keys:
+                  - kty: "RSA"
+                    kid: "key1"
+                    use: "sig"
+                    alg: "RS256"
+                    n: "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw"
+                    e: "AQAB"
+
+  /management/metrics/summary:
+    get:
+      tags:
+        - management
+      summary: Resumen de métricas
+      description: Devuelve un resumen de las métricas del servidor de autenticación
+      operationId: getMetricsSummary
+      security:
+        - OAuth2: [admin]
+      responses:
+        '200':
+          description: Resumen de métricas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsSummary'
+        '401':
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /management/health:
+    get:
+      tags:
+        - management
+      summary: Estado del servidor
+      description: Devuelve información sobre el estado del servidor
+      operationId: getHealthStatus
+      responses:
+        '200':
+          description: Estado del servidor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  schemas:
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: Token de acceso JWT
+        token_type:
+          type: string
+          description: Tipo de token (Bearer)
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Tiempo de expiración en segundos
+        refresh_token:
+          type: string
+          description: Token de actualización para obtener nuevos tokens de acceso
+        scope:
+          type: string
+          description: Ámbitos concedidos, separados por espacios
+        id_token:
+          type: string
+          description: Token de identidad JWT (solo para flujos OpenID Connect)
+
+    IntrospectionResponse:
+      type: object
+      properties:
+        active:
+          type: boolean
+          description: Indica si el token está activo
+        scope:
+          type: string
+          description: Ámbitos concedidos, separados por espacios
+        client_id:
+          type: string
+          description: Identificador del cliente que solicitó el token
+        username:
+          type: string
+          description: Nombre de usuario asociado al token
+        exp:
+          type: integer
+          description: Tiempo de expiración (Unix timestamp)
+        sub:
+          type: string
+          description: Identificador único del sujeto (usuario)
+        iss:
+          type: string
+          description: Emisor del token
+        aud:
+          type: string
+          description: Audiencia del token
+        iat:
+          type: integer
+          description: Tiempo de emisión (Unix timestamp)
+        jti:
+          type: string
+          description: Identificador único del token
+
+    OidcConfiguration:
+      type: object
+      properties:
+        issuer:
+          type: string
+          description: URL del emisor
+        authorization_endpoint:
+          type: string
+          description: Endpoint de autorización
+        token_endpoint:
+          type: string
+          description: Endpoint de token
+        userinfo_endpoint:
+          type: string
+          description: Endpoint de información de usuario
+        jwks_uri:
+          type: string
+          description: URI del conjunto de claves JSON Web Key
+        registration_endpoint:
+          type: string
+          description: Endpoint de registro de clientes
+        scopes_supported:
+          type: array
+          items:
+            type: string
+          description: Ámbitos soportados
+        response_types_supported:
+          type: array
+          items:
+            type: string
+          description: Tipos de respuesta soportados
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+          description: Tipos de concesión soportados
+        token_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+          description: Métodos de autenticación soportados para el endpoint de token
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+          description: Tipos de sujeto soportados
+        id_token_signing_alg_values_supported:
+          type: array
+          items:
+            type: string
+          description: Algoritmos de firma soportados para el token de identidad
+        claims_supported:
+          type: array
+          items:
+            type: string
+          description: Claims soportados
+
+    JsonWebKey:
+      type: object
+      properties:
+        kty:
+          type: string
+          description: Tipo de clave
+        kid:
+          type: string
+          description: Identificador de clave
+        use:
+          type: string
+          description: Uso de la clave
+        alg:
+          type: string
+          description: Algoritmo
+        n:
+          type: string
+          description: Módulo (para claves RSA)
+        e:
+          type: string
+          description: Exponente (para claves RSA)
+        crv:
+          type: string
+          description: Curva (para claves EC)
+        x:
+          type: string
+          description: Coordenada X (para claves EC)
+        y:
+          type: string
+          description: Coordenada Y (para claves EC)
+
+    ClientRegistration:
+      type: object
+      required:
+        - client_name
+        - redirect_uris
+      properties:
+        client_name:
+          type: string
+          description: Nombre del cliente
+        description:
+          type: string
+          description: Descripción del cliente
+        client_uri:
+          type: string
+          format: uri
+          description: URI del cliente
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección permitidas
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección después de cerrar sesión
+        grant_types:
+          type: array
+          items:
+            type: string
+            enum: [authorization_code, implicit, password, client_credentials, refresh_token]
+          description: Tipos de concesión permitidos
+        response_types:
+          type: array
+          items:
+            type: string
+            enum: [code, token, id_token]
+          description: Tipos de respuesta permitidos
+        scope:
+          type: string
+          description: Ámbitos solicitados, separados por espacios
+        token_endpoint_auth_method:
+          type: string
+          enum: [client_secret_basic, client_secret_post, private_key_jwt, none]
+          description: Método de autenticación para el endpoint de token
+        id_token_signed_response_alg:
+          type: string
+          description: Algoritmo de firma para el token de identidad
+        logo_uri:
+          type: string
+          format: uri
+          description: URI del logotipo del cliente
+        contacts:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Contactos del cliente
+        access_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de acceso en segundos
+        refresh_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de actualización en segundos
+
+    ClientUpdate:
+      type: object
+      properties:
+        client_name:
+          type: string
+          description: Nombre del cliente
+        description:
+          type: string
+          description: Descripción del cliente
+        client_uri:
+          type: string
+          format: uri
+          description: URI del cliente
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección permitidas
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección después de cerrar sesión
+        grant_types:
+          type: array
+          items:
+            type: string
+            enum: [authorization_code, implicit, password, client_credentials, refresh_token]
+          description: Tipos de concesión permitidos
+        response_types:
+          type: array
+          items:
+            type: string
+            enum: [code, token, id_token]
+          description: Tipos de respuesta permitidos
+        scope:
+          type: string
+          description: Ámbitos solicitados, separados por espacios
+        token_endpoint_auth_method:
+          type: string
+          enum: [client_secret_basic, client_secret_post, private_key_jwt, none]
+          description: Método de autenticación para el endpoint de token
+        id_token_signed_response_alg:
+          type: string
+          description: Algoritmo de firma para el token de identidad
+        logo_uri:
+          type: string
+          format: uri
+          description: URI del logotipo del cliente
+        contacts:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Contactos del cliente
+        access_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de acceso en segundos
+        refresh_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de actualización en segundos
+
+    ClientResponse:
+      type: object
+      properties:
+        client_id:
+          type: string
+          description: Identificador del cliente
+        client_secret:
+          type: string
+          description: Secreto del cliente
+        client_name:
+          type: string
+          description: Nombre del cliente
+        description:
+          type: string
+          description: Descripción del cliente
+        client_uri:
+          type: string
+          format: uri
+          description: URI del cliente
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección permitidas
+        post_logout_redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+          description: URIs de redirección después de cerrar sesión
+        grant_types:
+          type: array
+          items:
+            type: string
+          description: Tipos de concesión permitidos
+        response_types:
+          type: array
+          items:
+            type: string
+          description: Tipos de respuesta permitidos
+        scope:
+          type: string
+          description: Ámbitos concedidos, separados por espacios
+        token_endpoint_auth_method:
+          type: string
+          description: Método de autenticación para el endpoint de token
+        id_token_signed_response_alg:
+          type: string
+          description: Algoritmo de firma para el token de identidad
+        logo_uri:
+          type: string
+          format: uri
+          description: URI del logotipo del cliente
+        contacts:
+          type: array
+          items:
+            type: string
+            format: email
+          description: Contactos del cliente
+        client_id_issued_at:
+          type: integer
+          description: Tiempo de emisión del client_id (Unix timestamp)
+        client_secret_expires_at:
+          type: integer
+          description: Tiempo de expiración del client_secret (Unix timestamp, 0 si no expira)
+        access_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de acceso en segundos
+        refresh_token_validity_seconds:
+          type: integer
+          description: Tiempo de validez del token de actualización en segundos
+        active:
+          type: boolean
+          description: Indica si el cliente está activo
+
+    UserInfo:
+      type: object
+      properties:
+        sub:
+          type: string
+          description: Identificador único del sujeto
+        name:
+          type: string
+          description: Nombre completo
+        given_name:
+          type: string
+          description: Nombre
+        family_name:
+          type: string
+          description: Apellido
+        email:
+          type: string
+          format: email
+          description: Correo electrónico
+        email_verified:
+          type: boolean
+          description: Indica si el correo ha sido verificado
+        phone_number:
+          type: string
+          description: Número de teléfono
+        phone_number_verified:
+          type: boolean
+          description: Indica si el teléfono ha sido verificado
+        address:
+          type: object
+          properties:
+            formatted:
+              type: string
+            street_address:
+              type: string
+            locality:
+              type: string
+            region:
+              type: string
+            postal_code:
+              type: string
+            country:
+              type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Código de error
+        error_description:
+          type: string
+          description: Descripción del error
+
+    MetricsSummary:
+      type: object
+      properties:
+        clients:
+          type: object
+          properties:
+            active:
+              type: integer
+              description: Número de clientes activos
+            total:
+              type: integer
+              description: Número total de clientes
+        revokedTokens:
+          type: object
+          properties:
+            active:
+              type: integer
+              description: Número de tokens revocados activos
+            total:
+              type: integer
+              description: Número total de tokens revocados
+        auditEvents:
+          type: object
+          properties:
+            last24Hours:
+              type: integer
+              description: Número de eventos de auditoría en las últimas 24 horas
+            total:
+              type: integer
+              description: Número total de eventos de auditoría
+            byType:
+              type: object
+              additionalProperties:
+                type: integer
+              description: Número de eventos de auditoría por tipo
+        authorization:
+          type: object
+          properties:
+            activeCodes:
+              type: integer
+              description: Número de códigos de autorización activos
+            activeRequests:
+              type: integer
+              description: Número de solicitudes de autorización activas
+        timestamp:
+          type: string
+          format: date-time
+          description: Marca de tiempo de la generación de métricas
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, UNKNOWN]
+          description: Estado general del servidor
+        components:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [UP, DOWN, UNKNOWN]
+              details:
+                type: object
+                additionalProperties: true
+          description: Estado de los componentes individuales
+        timestamp:
+          type: string
+          format: date-time
+          description: Marca de tiempo de la verificación de estado
+
+  securitySchemes:
+    OAuth2:
+      type: oauth2
+      description: Autenticación OAuth 2.0
+      flows:
+        authorizationCode:
+          authorizationUrl: /oauth2/authorize
+          tokenUrl: /oauth2/token
+          scopes:
+            openid: Acceso a la identidad del usuario
+            profile: Acceso al perfil del usuario
+            email: Acceso al correo electrónico del usuario
+            phone: Acceso al número de teléfono del usuario
+            read: Acceso de lectura a los recursos
+            write: Acceso de escritura a los recursos
+            admin: Acceso administrativo
+        password:
+          tokenUrl: /oauth2/token
+          scopes:
+            openid: Acceso a la identidad del usuario
+            profile: Acceso al perfil del usuario
+            email: Acceso al correo electrónico del usuario
+            phone: Acceso al número de teléfono del usuario
+            read: Acceso de lectura a los recursos
+            write: Acceso de escritura a los recursos
+            admin: Acceso administrativo
+        clientCredentials:
+          tokenUrl: /oauth2/token
+          scopes:
+            read: Acceso de lectura a los recursos
+            write: Acceso de escritura a los recursos
+            admin: Acceso administrativo
