@@ -15,6 +15,12 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:bass}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
 
   jpa:
     hibernate:
@@ -57,3 +63,15 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: method
     packages-to-scan: dev.edgeahz.ec.sports.authserver.api.rest
+
+oauth:
+  client:
+    defaults:
+      grant-types:
+        - authorization_code
+      response-types:
+        - code
+      token-endpoint-auth-method: client_secret_basic
+      id-token-signed-response-alg: RS256
+      access-token-validity-seconds: 3600
+      refresh-token-validity-seconds: 86400

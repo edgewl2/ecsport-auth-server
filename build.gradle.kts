@@ -44,18 +44,28 @@ dependencies {
     implementation("org.flywaydb:flyway-mysql")
     runtimeOnly("com.mysql:mysql-connector-j")
 
+    // Lombok
+    compileOnly("org.projectlombok:lombok")
+
+    // MapStruct
+    implementation("org.mapstruct:mapstruct:1.6.3")
+
+    // Lombok
+    compileOnly("org.projectlombok:lombok")
+
     // OpenAPI
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
     implementation("org.openapitools:jackson-databind-nullable:0.2.6")
     implementation("io.swagger.core.v3:swagger-annotations:2.2.30")
 
-    // Lombok
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
-
     // Develop
     developmentOnly("org.springframework.boot:spring-boot-devtools")
+
+    // Annotation Processors - Orden importante
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
+    annotationProcessor("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+    annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
 
     // Testing
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -72,6 +82,13 @@ dependencyManagement {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(listOf(
+        "-Amapstruct.defaultComponentModel=spring",
+        "-Amapstruct.unmappedTargetPolicy=IGNORE"
+    ))
 }
 
 openApiGenerate {
